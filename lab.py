@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 import re
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
@@ -240,8 +241,9 @@ def select(args):
     def add(weights, fusion_bias=0.0):
         val_prob = sum(w * pair[0] for w, pair in zip(weights, pairs))
         val_prob[:, LABELS.index("fusion")] *= np.exp(fusion_bias)
-        result = scores(val.label, val_prob)
-        candidates.append((result["macro_f1"], tuple(weights), fusion_bias, result))
+        predicted = np.array(LABELS)[val_prob.argmax(axis=1)]
+        metric = f1_score(val.label, predicted, labels=LABELS, average="macro")
+        candidates.append((metric, tuple(weights), fusion_bias))
 
     weights = np.eye(len(pairs))
     for weight in weights:
@@ -249,13 +251,18 @@ def select(args):
     add(weights.mean(axis=0))
     if len(pairs) > 1:
         ranked = sorted(range(len(pairs)), key=lambda i: candidates[i][0], reverse=True)
-        for alpha in (.25, .5, .75):
-            add(alpha * weights[ranked[0]] + (1 - alpha) * weights[ranked[1]])
+        model_pairs = combinations(ranked, 2) if args.all_pairs else [tuple(ranked[:2])]
+        for first, second in model_pairs:
+            for alpha in (.25, .5, .75):
+                add(alpha * weights[first] + (1 - alpha) * weights[second])
     best = max(candidates, key=lambda candidate: candidate[0])
     for bias in (-.25, -.1, .1, .25):
         add(best[1], bias)
     ordered = sorted(candidates, key=lambda candidate: candidate[0], reverse=True)
-    _, weight, bias, result = ordered[0]
+    _, weight, bias = ordered[0]
+    val_prob = sum(w * pair[0] for w, pair in zip(weight, pairs))
+    val_prob[:, LABELS.index("fusion")] *= np.exp(bias)
+    result = scores(val.label, val_prob)
     probs = sum(w * pair[1] for w, pair in zip(weight, pairs))
     probs[:, LABELS.index("fusion")] *= np.exp(bias)
     predicted = np.array(LABELS)[probs.argmax(axis=1)]
@@ -267,7 +274,7 @@ def select(args):
     }}
     save_metrics(args, results, candidates=[
         {"macro_f1": metric, "weights": list(weight), "fusion_bias": bias}
-        for metric, weight, bias, _ in ordered
+        for metric, weight, bias in ordered
     ])
 
 
@@ -312,9 +319,12 @@ def main():
     transformer.add_argument("--epochs", type=int, default=2)
     transformer.add_argument("--lr", type=float, default=2e-5)
     transformer.add_argument("--weighted", action="store_true")
+    transformer.add_argument("--fit-rows", type=int)
+    transformer.add_argument("--gradient-checkpointing", action="store_true")
     ensemble = command("select", select, "runs/final")
     ensemble.add_argument("runs", nargs="+", type=Path)
     ensemble.add_argument("--expected", type=int, default=25000)
+    ensemble.add_argument("--all-pairs", action="store_true")
     args = parser.parse_args()
     args.func(args)
 

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from scipy.special import softmax
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding,
     Trainer, TrainingArguments, set_seed,
@@ -70,7 +71,15 @@ class WeightedTrainer(Trainer):
 
 
 def run(args):
-    text, _, val, fit = partitions(args)
+    text, train, val, fit = partitions(args)
+    if args.fit_rows is not None:
+        if args.fit_rows < len(LABELS):
+            raise ValueError("--fit-rows must allow at least one example per class")
+        fit = train
+        if args.fit_rows < len(train):
+            fit, _ = train_test_split(
+                train, train_size=args.fit_rows, stratify=train.label, random_state=SEED
+            )
     test = load(args.data / "test.csv", ["id", text])
     args.out.mkdir(parents=True, exist_ok=False)
     set_seed(SEED)
@@ -103,6 +112,8 @@ def run(args):
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
         gradient_accumulation_steps=args.accumulation, weight_decay=.01, warmup_ratio=.06,
         seed=SEED, data_seed=SEED, bf16=bf16, fp16=cuda and not bf16,
+        gradient_checkpointing=args.gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="none", disable_tqdm=True, save_only_model=True,
     )
     trainer = WeightedTrainer(
@@ -117,4 +128,4 @@ def run(args):
     result = write_predictions(args.out, val, val_prob, test, test_prob)
     save_metrics(args, {"encoder": result}, best_checkpoint=best_checkpoint,
                  model_commit=getattr(model.config, "_commit_hash", None),
-                 epoch_history=trainer.state.log_history)
+                 epoch_history=trainer.state.log_history, fit_rows=len(fit))

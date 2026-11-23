@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--fit-rows", type=int, default=60000)
     parser.add_argument("--max-chars", type=int, default=2000)
+    parser.add_argument("--coverage", choices=["head", "distributed"], default="head")
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument(
@@ -55,9 +56,24 @@ def main():
         for start in range(0, len(frame), args.batch):
             yield frame.iloc[start:start + args.batch]
 
+    def excerpts(document):
+        budget = args.max_chars - 2
+        if len(document) <= args.max_chars or budget < 3:
+            return document[:args.max_chars]
+        edge = budget // 3
+        middle_length = budget - 2 * edge
+        middle = (len(document) - middle_length) // 2
+        return "\n".join([
+            document[:edge], document[middle:middle + middle_length], document[-edge:],
+        ])
+
     def counts(frame):
-        docs = frame[column].astype(str).str.slice(0, args.max_chars)
-        return [word.transform(docs), char.transform(docs)]
+        documents = frame[column].astype(str)
+        if args.coverage == "head":
+            documents = documents.str.slice(0, args.max_chars)
+        else:
+            documents = documents.map(excerpts)
+        return [word.transform(documents), char.transform(documents)]
 
     # CSR has one stored entry per occupied bucket per document.
     df = [np.zeros(buckets, dtype=np.int64) for _ in range(2)]
