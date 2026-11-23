@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-from scipy.sparse import hstack
+from scipy.sparse import hstack, vstack
 from scipy.special import softmax
 from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.linear_model import SGDClassifier
@@ -22,7 +22,13 @@ def main():
     parser.add_argument("--max-chars", type=int, default=2000)
     parser.add_argument("--batch", type=int, default=256)
     parser.add_argument("--epochs", type=int, default=2)
+    parser.add_argument(
+        "--cache-gib", type=float, default=0,
+        help="Cap retained sparse training blocks; assembling them may temporarily use twice this amount.",
+    )
     args = parser.parse_args()
+    if not np.isfinite(args.cache_gib) or args.cache_gib < 0:
+        parser.error("--cache-gib must be finite and nonnegative")
     if min(args.fit_rows, args.max_chars, args.batch, args.epochs) < 1:
         parser.error("Numeric parameters must be positive")
 
@@ -55,26 +61,54 @@ def main():
 
     # CSR has one stored entry per occupied bucket per document.
     df = [np.zeros(buckets, dtype=np.int64) for _ in range(2)]
+    cache_limit = int(args.cache_gib * 1024 ** 3)
+    blocks = [] if cache_limit else None
+    cached_bytes = 0
     for batch in batches(fit):
-        for freq, matrix in zip(df, counts(batch)):
+        matrices = counts(batch)
+        for freq, matrix in zip(df, matrices):
             np.add.at(freq, matrix.indices, 1)
+        if blocks is not None:
+            cached_bytes += sum(
+                matrix.data.nbytes + matrix.indices.nbytes + matrix.indptr.nbytes
+                for matrix in matrices
+            )
+            if cached_bytes <= cache_limit:
+                blocks.append(matrices)
+            else:
+                blocks = None
+                print("Sparse cache budget exceeded; continuing in streaming mode", flush=True)
     idf = [np.asarray(np.log((1 + len(fit)) / (1 + freq)) + 1, dtype=np.float32)
            for freq in df]
 
-    def features(frame):
-        matrices = counts(frame)
+    def weight(matrices):
         for matrix, weights in zip(matrices, idf):
             matrix.data[:] = (1 + np.log(matrix.data)) * weights[matrix.indices]
             normalize(matrix, copy=False)
         return hstack(matrices, format="csr")
+
+    def features(frame):
+        return weight(counts(frame))
+
+    cached = None
+    if blocks is not None:
+        for index, matrices in enumerate(blocks):
+            blocks[index] = weight(matrices)
+        cached = vstack(blocks, format="csr")
+        del blocks, matrices
+        print(f"Cached training features ({cached_bytes / 1024 ** 3:.2f} GiB in blocks)", flush=True)
 
     model = SGDClassifier(
         loss="modified_huber", alpha=1e-5, average=True, random_state=SEED
     )
     rng = np.random.default_rng(SEED)
     for epoch in range(args.epochs):
-        for batch in batches(fit.iloc[rng.permutation(len(fit))]):
-            model.partial_fit(features(batch), batch.label, classes=LABELS)
+        order = rng.permutation(len(fit))
+        for start in range(0, len(order), args.batch):
+            rows = order[start:start + args.batch]
+            batch = fit.iloc[rows]
+            matrix = cached[rows] if cached is not None else features(batch)
+            model.partial_fit(matrix, batch.label, classes=LABELS)
         print(f"Completed epoch {epoch + 1}/{args.epochs}", flush=True)
     if list(model.classes_) != LABELS:
         raise ValueError("Unexpected model class order")
@@ -85,8 +119,10 @@ def main():
             for batch in batches(frame)
         ])
 
+    used_cache = cached is not None
+    del cached
     metrics = write_predictions(args.out, val, predict(val), test, predict(test))
-    save_metrics(args, {"hashed": metrics}, fit_rows=len(fit))
+    save_metrics(args, {"hashed": metrics}, fit_rows=len(fit), used_cache=used_cache)
 
 
 if __name__ == "__main__":
