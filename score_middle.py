@@ -80,8 +80,12 @@ def main():
     middle = write_predictions(args.out, val, val_prob, test, test_prob)
     variants = {"head_tail": scores(val.label, references[0]), "middle": middle}
     for alpha in (0.1, 0.2, 0.3):
-        variants[f"middle_weight_{alpha}"] = scores(
-            val.label, (1 - alpha) * references[0] + alpha * val_prob
+        name = f"middle_weight_{alpha}"
+        target = args.out / name
+        target.mkdir()
+        variants[name] = write_predictions(
+            target, val, (1 - alpha) * references[0] + alpha * val_prob,
+            test, (1 - alpha) * references[1] + alpha * test_prob,
         )
     diagnostics = {}
     for name, mask in (("short", ~val_long), ("long", val_long)):
