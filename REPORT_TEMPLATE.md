@@ -41,4 +41,22 @@
 
 ## Додаток
 
-[Додай таблиці й графіки EDA, матрицю помилок та precision/recall/F1 за класами з локальних артефактів.]
+| Частина спліту | Тексти |
+|---|---:|
+| Навчальна | 217 881 |
+| Валідаційна | 54 471 |
+| Тестова | 25 000 |
+
+Детальні таблиці й графіки EDA, precision/recall/F1 та матриця
+помилок генеруються з локальних артефактів. Підстав фактичні шляхи
+до спліту й метрик фінального ансамблю:
+
+```bash
+python -m pip install matplotlib
+python build_appendix.py --data data --split .local-training/runs/split.json \
+  --metrics .local-training/runs/select-full-cpu-xlmr/metrics.json --out appendix
+```
+
+Якщо назви колонок відрізняються, передай `--language НАЗВА` та
+`--domain НАЗВА`. Результат — `appendix/APPENDIX.md` і SVG-графіки.
+Додавай до звіту лише згенеровані агрегати. Залиш дані й прогнози локально.
