@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from lab import LABELS, digest, partitions
+from lab import LABELS, SEED, digest, partitions
 
 
 def table(frame, index_name):
@@ -31,8 +31,12 @@ def main():
     parser.add_argument("--result", default="submission_1")
     parser.add_argument("--language")
     parser.add_argument("--domain")
+    parser.add_argument("--example-chars", type=int, default=240)
     parser.add_argument("--out", type=Path, default=Path("appendix"))
     args = parser.parse_args()
+
+    if args.example_chars < 1:
+        parser.error("--example-chars must be positive")
 
     metrics = json.loads(args.metrics.read_text())
     if metrics["split_sha256"] != digest(args.split):
@@ -94,7 +98,17 @@ def main():
             missing.pop(key)
         sections.append("Метадані відсутні або колонки не вказано: " + ", ".join(missing.values()) + ".")
 
+    examples = fit.loc[length.gt(0)].groupby("label").sample(n=1, random_state=SEED)
+    snippets = examples.set_index("label")[column].astype(str).str.split().str.join(" ")
+    snippets = snippets.reindex(labels)
+    clipped = snippets.str.len().gt(args.example_chars)
+    snippets = snippets.str.slice(0, args.example_chars).where(
+        ~clipped, snippets.str.slice(0, args.example_chars - 1) + "…"
+    )
     sections.extend([
+        "### Приклади з навчальної частини",
+        "Мітки взято з набору даних. Для fusion розмітка задається на рівні документа.",
+        table(snippets.fillna("Порожній клас").to_frame("Уривок"), "Клас"),
         "## Метрики фінального варіанта на валідації",
         f"Macro-F1 — {record['macro_f1']:.5f}.",
         table(report.astype(str), "Клас"),
