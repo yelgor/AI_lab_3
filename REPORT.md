@@ -22,7 +22,7 @@
 
 ## Фінальна модель
 
-Оцінки XLM-R з `checkpoint-1875` і CPU-моделі `hash-full-distributed` усереднювалися з вагами 0,5 / 0,5. Перед вибором класу оцінка `fusion` множилася на `exp(-0.1)`. Вихідний файл цього ансамблю — `select-full-cpu-xlmr/submission_1.csv`. Публічний результат Kaggle становив **0,90867 macro-F1**. Команди навчання та генерації CSV наведено в репозиторії. [Код](https://github.com/yelgor/AI_lab_3/tree/f5d4bb5) · [Навчання](RUNBOOK.md#final-model-training) · [Генерація прогнозів](RESULTS.md#відтворення-прогнозів-і-відбору)
+Оцінки XLM-R з `checkpoint-1875` і CPU-моделі `hash-full-distributed` усереднювалися з вагами 0,5 / 0,5. Перед вибором класу оцінка `fusion` множилася на `exp(-0.1)`. Вихідний файл цього ансамблю — `select-full-cpu-xlmr/submission_1.csv`. Публічний результат Kaggle становив **0,90867 macro-F1**. Команди навчання та генерації CSV наведено в репозиторії. [Код](https://github.com/yelgor/AI_lab_3/tree/a1a4d4abd3b42cdb950138da9c99612dcfe86656) · [Навчання](RUNBOOK.md#final-model-training) · [Генерація прогнозів](RESULTS.md#відтворення-прогнозів-і-відбору)
 
 ## Додаток
 
