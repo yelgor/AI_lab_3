@@ -6,6 +6,8 @@
 
 Для порівняння моделей використовувався фіксований спліт із 217 881 навчального та 54 471 валідаційного документа. Ознаки TF-IDF підганялися на навчальній частині. Macro-F1 надає кожному класу однакову вагу, тому разом із ним відстежувався F1 для `fusion`. Тестовий CSV містив прогнози для всіх 25 000 ID у порядку зразка подання.
 
+У навчальній частині 80,6% документів англомовні. Баланс класів змінюється за доменами. Наприклад, у `gutenberg` 5 351 із 5 871 тексту мають мітку `ai`. Медіанні довжини близькі, але 95-й перцентиль для `fusion` становить 10 998 символів проти 6 848 для `ai`. Такий довгий хвіст підсилює мотивацію перевірити охоплення кількох частин документа.
+
 ## Класична модель та енкодер
 
 Початковий baseline використовував TF-IDF для словесних і символьних n-грам та лінійний SVM. Параметр регуляризації `C` обирається за macro-F1 на валідації. Побудова словника на великій вибірці вичерпала доступну RAM. Для масштабування n-грами відображалися у простір ознак фіксованого розміру за допомогою хешування. Частоти документів для IDF накопичувалися пакетами, а лінійний класифікатор SGD оновлювався на розріджених пакетах.
@@ -25,6 +27,58 @@
 Оцінки XLM-R з `checkpoint-1875` і CPU-моделі `hash-full-distributed` усереднювалися з вагами 0,5 / 0,5. Перед вибором класу оцінка `fusion` множилася на `exp(-0.1)`. Вихідний файл цього ансамблю — `select-full-cpu-xlmr/submission_1.csv`. Публічний результат цього файлу на Kaggle становив **0,90867 macro-F1**. Варіант із середнім вікном дав найкращу локальну оцінку **0,89983 macro-F1**. Його публічна оцінка невідома. Команди навчання та генерації CSV наведено в репозиторії. [Код](https://github.com/yelgor/AI_lab_3/tree/a1a4d4abd3b42cdb950138da9c99612dcfe86656) · [Навчання](RUNBOOK.md#final-model-training) · [Генерація прогнозів](RESULTS.md#відтворення-прогнозів-і-відбору)
 
 ## Додаток
+
+### EDA навчальної частини
+
+| Клас | Кількість |
+| --- | --- |
+| ai | 97511 |
+| fusion | 67010 |
+| human | 53360 |
+
+#### Довжина текстів у символах
+
+| Клас | P25 | Медіана | P75 | P95 |
+| --- | --- | --- | --- | --- |
+| ai | 1800 | 3111 | 4420 | 6848 |
+| fusion | 1563 | 2772 | 4484 | 10998 |
+| human | 1487 | 2908 | 4624 | 8948 |
+
+![Квантилі довжин](figures/eda-lengths.svg)
+
+#### Мова
+
+| Мова | ai | fusion | human |
+| --- | --- | --- | --- |
+| de-DE | 16241 | 14297 | 11653 |
+| en-EN | 81270 | 52713 | 41707 |
+
+![Мова](figures/eda-language.svg)
+
+#### Домен
+
+| Домен | ai | fusion | human |
+| --- | --- | --- | --- |
+| arxiv_papers | 9593 | 1475 | 321 |
+| blog_authorship_corpus | 12554 | 9879 | 9909 |
+| bundestag | 15962 | 14266 | 11626 |
+| cnn_news | 15576 | 9159 | 10708 |
+| euro_court_cases | 8859 | 8164 | 5018 |
+| gutenberg | 5351 | 314 | 206 |
+| house_of_commons | 12299 | 7727 | 5538 |
+| student_essays | 17317 | 16026 | 10034 |
+
+![Домен](figures/eda-domain.svg)
+
+#### Приклади з навчальної частини
+
+Мітки взято з набору даних. Для fusion розмітка задається на рівні документа.
+
+| Клас | Уривок |
+| --- | --- |
+| ai | The House will know that these are challenging times for many across our nation, with economic headwinds pushing unemployment figures upwards. However, I want to reassure this House that the Conservative Government stands resolute in its c… |
+| fusion | Herr Präsident! Liebe Kolleginnen und Kollegen! Lieber Hubertus Heil! Meine sehr geehrten Damen und Herren! Wir Sozial- und Arbeitsmarktpolitikerinnen und ‑politiker und das Bundesministerium tragen Verantwortung für die Frage, ob sich die… |
+| human | I remember one summer vacation, that my family and I took, where we went to another state to visit another relative that we haven't seen in awhile. Summer vacation had been the same for many years, summer vacation is when teenagers take a … |
 
 ### Порівняння моделей
 
@@ -67,7 +121,7 @@
 
 ### Відтворення EDA та метрик
 
-Розподіли навчальних текстів за мовою, доменом і довжиною потребують локального `train.csv` та оригінального спліту. Генератор записує таблиці й графіки за мовою, доменом і довжиною, по одному короткому уривку кожного класу та метрики в `appendix/APPENDIX.md` і сусідні SVG-файли.
+Для відтворення таблиць і графіків потрібні офіційний `train.csv`, оригінальний спліт і метрики відповідного запуску. Генератор створює `appendix/APPENDIX.md` та SVG-файли.
 
 ```bash
 python -m pip install matplotlib
