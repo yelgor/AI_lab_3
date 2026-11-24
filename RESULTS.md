@@ -30,8 +30,7 @@
 ## Відтворення прогнозів і відбору
 
 Використай оригінальний спліт, офіційні CSV і чекпойнт XLM-R першої
-епохи (`checkpoint-1875`). Параметри навчання є в `LOCAL_AGENT.md`
-та `FULL_CPU_AGENT.md`. Потрібне середовище з `requirements-gpu.txt`
+епохи (`checkpoint-1875`). Команди навчання є в [RUNBOOK.md](RUNBOOK.md#final-model-training). Потрібне середовище з `requirements-gpu.txt`
 і робочою CUDA. Підстав шляхи до готових каталогів моделей.
 
 ```bash

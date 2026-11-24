@@ -7,7 +7,7 @@ requirements.txt`. For encoder runs, enable a GPU in Colab or use local CUDA.
 Install `requirements-gpu.txt` in that environment. In Colab, retain the
 dataset, split, and run artifacts on persistent storage. Do not commit them.
 
-## Instructions for the local runner
+## Experiment setup
 
 1. Inspect only the CSV column names to identify the text, language, domain,
    and original document ID columns. Use the grouping argument only when a
@@ -28,11 +28,8 @@ dataset, split, and run artifacts on persistent storage. Do not commit them.
    partition, while encoder variants train on the same fixed subset. Compare
    all variants on the full common validation partition. A leaderboard score
    is an external result, so choose parameters and blending weights internally.
-4. Keep a log of hypotheses, actual results, and failures. Present the log and
-   artifacts to the student for their own report and defense. The local agent
-   can manage jobs and parse metrics. Train using only official training data
-   and allowed open weights. Keep raw competition text out of proprietary AI
-   services and use no external corpus or test labels.
+4. Record hypotheses, results, and failures. Train using the official
+   training data and allowed open weights.
 5. Review the validation metrics before manually submitting the generated file
    to Kaggle. The notebook environment can run the same commands with `!`.
    Keep the artifacts associated with any selected Kaggle submission.
@@ -71,3 +68,19 @@ explainability. A coefficient describes a learned association. Look at which
 features are present in a specific document before attributing its prediction.
 EDA writes short examples and distribution tables. Use the actual text and
 metadata in those files to investigate when the classes differ.
+
+## Final model training
+
+Use the original `runs/split.json` and the official CSV files in `data/`.
+The following commands train the two models used in the final ensemble.
+Keep a copy of the first encoder checkpoint before checkpoint rotation,
+or use the original `checkpoint-1875`.
+
+```bash
+python large_baseline.py --fit-rows 300000 --coverage distributed --max-chars 4000 --batch 256 --epochs 3 --out runs/hash-full-distributed
+python lab.py encoder --fit-rows 60000 --strategy head-tail --length 384 --batch 1 --accumulation 32 --epochs 3 --gradient-checkpointing --out runs/xlmr-60k-head-tail
+```
+
+The distributed experiment uses all fit rows because 300000 exceeds the
+partition size. See [RESULTS.md](RESULTS.md#відтворення-прогнозів-і-відбору)
+for the checkpoint scoring and submission commands.
